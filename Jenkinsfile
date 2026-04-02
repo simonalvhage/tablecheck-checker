@@ -66,44 +66,27 @@ pipeline {
                 """
             }
         }
-
         stage('Notify if available') {
             when {
                 expression {
-                    try {
-                        def results = readFile('results.json')
-                        def json = new HashMap(new groovy.json.JsonSlurper().parseText(results))
-                        return json.available && json.available.size() > 0
-                    } catch (Exception e) {
-                        return false
-                    }
+                    return fileExists('results.json') && readFile('results.json').contains('"available": {') && !readFile('results.json').contains('"available": {}')
                 }
             }
             steps {
                 script {
-                    def results = readFile('results.json')
-                    def json = new HashMap(new groovy.json.JsonSlurper().parseText(results))
-                    def available = new HashMap(json.available ?: [:])
-
+                    // Build email body from raw text — no JsonSlurper needed
+                    def raw = readFile('results.json')
                     def body = """<h2>🍣 TableCheck Availability Found!</h2>
                         <p><strong>Restaurant:</strong> ${params.TABLECHECK_URL}</p>
                         <p><strong>Party size:</strong> ${params.PARTY_SIZE}</p>
                         <p><strong>Date range:</strong> ${params.START_DATE} → ${params.END_DATE}</p>
                         <hr/>
-                        <h3>Available slots:</h3>
-                        <table border="1" cellpadding="6" cellspacing="0">
-                        <tr><th>Date</th><th>Times</th></tr>"""
-
-                    available.each { day, slots ->
-                        body += "<tr><td>${day}</td><td>${slots.join(', ')}</td></tr>"
-                    }
-
-                    body += """</table>
+                        <pre>${raw}</pre>
                         <br/>
                         <p><a href="${params.TABLECHECK_URL}">Book now →</a></p>
                         <hr/>
                         <p><small>Jenkins build: ${env.BUILD_URL}</small></p>"""
-
+        
                     mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "🍣 Table available! ${params.START_DATE}–${params.END_DATE}",
