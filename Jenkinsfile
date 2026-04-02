@@ -65,17 +65,18 @@ pipeline {
         stage('Notify if available') {
             when {
                 expression {
-                    // Only proceed if results.json exists and has available slots
-                    def results = readFile('results.json')
-                    def json = new groovy.json.JsonSlurper().parseText(results)
+                    def f = new File("${env.WORKSPACE}/results.json")
+                    if (!f.exists()) return false
+                    def json = new HashMap(new groovy.json.JsonSlurper().parseText(f.text))
                     return json.available && json.available.size() > 0
                 }
             }
             steps {
                 script {
                     def results = readFile('results.json')
-                    def json = new groovy.json.JsonSlurper().parseText(results)
-
+                    def json = new HashMap(new groovy.json.JsonSlurper().parseText(results))
+                    def available = new HashMap(json.available ?: [:])
+        
                     def body = """<h2>🍣 TableCheck Availability Found!</h2>
                         <p><strong>Restaurant:</strong> ${params.TABLECHECK_URL}</p>
                         <p><strong>Party size:</strong> ${params.PARTY_SIZE}</p>
@@ -84,17 +85,17 @@ pipeline {
                         <h3>Available slots:</h3>
                         <table border="1" cellpadding="6" cellspacing="0">
                         <tr><th>Date</th><th>Times</th></tr>"""
-
-                    json.available.each { day, slots ->
+        
+                    available.each { day, slots ->
                         body += "<tr><td>${day}</td><td>${slots.join(', ')}</td></tr>"
                     }
-
+        
                     body += """</table>
                         <br/>
                         <p><a href="${params.TABLECHECK_URL}">Book now →</a></p>
                         <hr/>
                         <p><small>Jenkins build: ${env.BUILD_URL}</small></p>"""
-
+        
                     emailext(
                         to: params.NOTIFY_EMAIL,
                         subject: "🍣 Table available! ${params.START_DATE}–${params.END_DATE}",
