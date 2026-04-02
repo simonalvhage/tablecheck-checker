@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'mcr.microsoft.com/playwright/python:v1.58.0-noble'
-            args '--ipc=host'  // Prevents Chromium OOM crashes
+            args '--ipc=host'
         }
     }
 
@@ -35,14 +35,19 @@ pipeline {
     }
 
     triggers {
-        cron('H/30 * * * *')  // Every 30 minutes, 24/7
+        cron('H/30 * * * *')
+    }
+
+    options {
+        timeout(time: 10, unit: 'MINUTES')
+        disableConcurrentBuilds()
     }
 
     stages {
         stage('Install dependencies') {
             steps {
                 sh '''
-                    pip install playwright==$(playwright --version 2>/dev/null | grep -oP "[0-9.]+" || echo "1.58.0") --break-system-packages --quiet 2>/dev/null || true
+                    pip install playwright==1.58.0 --break-system-packages --quiet 2>/dev/null || true
                     playwright install chromium --with-deps 2>/dev/null || true
                 '''
             }
@@ -50,15 +55,15 @@ pipeline {
 
         stage('Check availability') {
             steps {
-                sh '''
-                    export TABLECHECK_URL="${TABLECHECK_URL}"
-                    export PARTY_SIZE="${PARTY_SIZE}"
-                    export START_DATE="${START_DATE}"
-                    export END_DATE="${END_DATE}"
+                sh """
+                    export TABLECHECK_URL="${params.TABLECHECK_URL}"
+                    export PARTY_SIZE="${params.PARTY_SIZE}"
+                    export START_DATE="${params.START_DATE}"
+                    export END_DATE="${params.END_DATE}"
                     export OUTPUT_FILE="results.json"
 
                     python tablecheck.py || true
-                '''
+                """
             }
         }
 
@@ -79,7 +84,7 @@ pipeline {
                     def results = readFile('results.json')
                     def json = new HashMap(new groovy.json.JsonSlurper().parseText(results))
                     def available = new HashMap(json.available ?: [:])
-        
+
                     def body = """<h2>🍣 TableCheck Availability Found!</h2>
                         <p><strong>Restaurant:</strong> ${params.TABLECHECK_URL}</p>
                         <p><strong>Party size:</strong> ${params.PARTY_SIZE}</p>
@@ -88,18 +93,18 @@ pipeline {
                         <h3>Available slots:</h3>
                         <table border="1" cellpadding="6" cellspacing="0">
                         <tr><th>Date</th><th>Times</th></tr>"""
-        
+
                     available.each { day, slots ->
                         body += "<tr><td>${day}</td><td>${slots.join(', ')}</td></tr>"
                     }
-        
+
                     body += """</table>
                         <br/>
                         <p><a href="${params.TABLECHECK_URL}">Book now →</a></p>
                         <hr/>
                         <p><small>Jenkins build: ${env.BUILD_URL}</small></p>"""
-        
-                    emailext(
+
+                    mail(
                         to: params.NOTIFY_EMAIL,
                         subject: "🍣 Table available! ${params.START_DATE}–${params.END_DATE}",
                         body: body,
@@ -114,12 +119,10 @@ pipeline {
         failure {
             script {
                 if (params.NOTIFY_EMAIL) {
-                    emailext(
+                    mail(
                         to: params.NOTIFY_EMAIL,
-                        subject: "⚠️ TableCheck scraper FAILED",
-                        body: """<p>The TableCheck scraper failed.</p>
-                            <p>Check: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></p>""",
-                        mimeType: 'text/html'
+                        subject: "⚠️ TableCheck scraper FAILED – ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "Pipeline misslyckades.\nLoggar: ${env.BUILD_URL}console"
                     )
                 }
             }
