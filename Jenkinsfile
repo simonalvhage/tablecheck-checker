@@ -65,10 +65,13 @@ pipeline {
         stage('Notify if available') {
             when {
                 expression {
-                    def f = new File("${env.WORKSPACE}/results.json")
-                    if (!f.exists()) return false
-                    def json = new HashMap(new groovy.json.JsonSlurper().parseText(f.text))
-                    return json.available && json.available.size() > 0
+                    try {
+                        def results = readFile('results.json')
+                        def json = new HashMap(new groovy.json.JsonSlurper().parseText(results))
+                        return json.available && json.available.size() > 0
+                    } catch (Exception e) {
+                        return false
+                    }
                 }
             }
             steps {
