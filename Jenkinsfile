@@ -29,7 +29,7 @@ pipeline {
         )
         string(
             name: 'NOTIFY_EMAIL',
-            defaultValue: '',
+            defaultValue: 'simon.alvhage@gmail.com',
             description: 'Email address for availability alerts'
         )
     }
