@@ -24,7 +24,7 @@ pipeline {
         )
         string(
             name: 'END_DATE',
-            defaultValue: '2026-05-22',
+            defaultValue: '2026-05-21',
             description: 'End date (YYYY-MM-DD)'
         )
         string(
